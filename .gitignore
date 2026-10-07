@@ -3,3 +3,21 @@ build/
 workdir/
 
 .DS_Store
+
+# --- research layer (added 2026-10-07) ---
+
+# Local paper corpus: extracted text + fetched bundles.
+#
+# Gitignored on licensing grounds as much as size. Licences in this index are not
+# uniformly permissive, and the arXiv API does not report them at all — it omits
+# <arxiv:license> entirely, so the manifest records licence as "unreported" rather
+# than guessing. Unknown is not permission.
+#
+# references/manifest.json IS tracked (ids, titles, categories, sha256, status) so
+# the corpus stays auditable without the payload. Rebuild with:
+#     python3 scripts/fm4sd_fetch.py --index && python3 scripts/fm4sd_fetch.py --fetch
+papers/
+
+# Python bytecode
+__pycache__/
+*.pyc

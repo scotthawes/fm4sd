@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""Query the local paper corpus and grep across its text.
+
+The corpus exists to answer specific questions, not to be read end to end. This
+is the read side: a manifest query, a full-text search, and a context extractor
+that returns passages sized for a model.
+
+Examples
+--------
+    python3 scripts/fm4sd_search.py list --has-code --since 2025
+    python3 scripts/fm4sd_search.py show nanotabpfn
+    python3 scripts/fm4sd_search.py grep "zero.inflation" --context 2
+    python3 scripts/fm4sd_search.py grep "hurdle" --limit 5 --min-hits 3
+    python3 scripts/fm4sd_search.py stats
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+PAPERS = REPO / "papers"
+MANIFEST = REPO / "references" / "manifest.json"
+DELIM = "\n--- entries ---\n"
+
+# Sentence-ish split for --context. Avoids depending on nltk/spacy.
+SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\[])")
+
+
+def load() -> list[dict]:
+    raw = MANIFEST.read_text()
+    if DELIM not in raw:
+        sys.exit("manifest malformed; rerun fm4sd_fetch.py --index")
+    return json.loads(raw.split(DELIM, 1)[1])
+
+
+def text_path(entry: dict) -> Path | None:
+    p = entry.get("path")
+    if not p:
+        return None
+    f = REPO / p / "text.txt"
+    return f if f.exists() else None
+
+
+def cmd_list(entries: list[dict], args) -> None:
+    rows = []
+    for e in entries:
+        if args.has_code and not e.get("has_code"):
+            continue
+        if args.section and e.get("section") != args.section:
+            continue
+        if args.category and e.get("category") != args.category:
+            continue
+        if args.local and e.get("fetch_status") not in ("ok", "cached"):
+            continue
+        if args.missing and e.get("fetch_status") in ("ok", "cached"):
+            continue
+        year = match_year(e.get("arxiv_id", ""))
+        if args.since and (year is None or year < args.since):
+            continue
+        if args.until and (year is None or year > args.until):
+            continue
+        rows.append(e)
+
+    for e in rows:
+        flags = "".join([
+            "C" if e.get("has_code") else " ",
+            "L" if e.get("fetch_status") in ("ok", "cached") else " ",
+        ])
+        print(f"{flags} {e['arxiv_id'] or '--------':>12}  {e['slug'][:38]:<38}  "
+              f"{e.get('section', ''):<7} {e.get('category', ''):<14} {e.get('citation', '')}")
+    print(f"\n{len(rows)} of {len(entries)} entries")
+
+
+def match_year(arxiv_id: str) -> int | None:
+    if len(arxiv_id) >= 4 and arxiv_id[:2].isdigit():
+        y = int(arxiv_id[:2])
+        return 2000 + y if y < 91 else 1900 + y
+    return None
+
+
+def cmd_show(entries: list[dict], slug: str, args) -> None:
+    match = [e for e in entries if e["slug"] == slug or e.get("arxiv_id") == slug]
+    if not match:
+        sys.exit(f"no entry named {slug}")
+    e = match[0]
+
+    print(json.dumps({k: v for k, v in e.items()
+                      if k not in ("links",)}, indent=2))
+    if e.get("links"):
+        print("\nlinks:")
+        for k, v in e["links"].items():
+            print(f"  {k:<12} {v}")
+
+    path = text_path(e)
+    if not path:
+        print(f"\nnot fetched locally ({e.get('fetch_status') or 'pending'})")
+        return
+
+    body = path.read_text(encoding="utf-8", errors="replace")
+    print(f"\n{len(body):,} chars of text at {path.relative_to(REPO)}")
+    if args.text:
+        print("\n" + body)
+
+
+def cmd_grep(entries: list[dict], args) -> None:
+    pattern = re.compile(args.pattern, re.I)
+    words = [w for w in re.findall(r"[a-z0-9_]+", args.pattern.lower()) if len(w) > 2]
+
+    found = []
+    for e in entries:
+        # Scoping matters: without it a term like "context" matches the whole
+        # corpus and the sweep returns noise instead of the papers on topic.
+        if args.category and e.get("category") != args.category:
+            continue
+        if args.section and e.get("section") != args.section:
+            continue
+        if args.has_code and not e.get("has_code"):
+            continue
+        if args.since and (match_year(e.get("arxiv_id", "")) or 0) < args.since:
+            continue
+
+        path = text_path(e)
+        if not path:
+            continue
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+
+        hits = [i for i, ln in enumerate(lines) if pattern.search(ln)]
+        if not hits:
+            continue
+
+        # min_hits keeps the signal-to-noise up: one incidental match in a
+        # 400-page bundle is noise, five are a claim worth reading.
+        if args.min_hits > 1 and len(hits) < args.min_hits:
+            continue
+
+        # Sample hits evenly across the file rather than taking the first N.
+        # Papers front-load preamble, TOC and author lists, so the first matches
+        # are almost always the least informative ones.
+        if len(hits) <= args.limit:
+            picked = hits
+        else:
+            step = len(hits) / args.limit
+            picked = [hits[int(i * step)] for i in range(args.limit)]
+
+        for i in picked:
+            lo, hi = max(0, i - args.context), min(len(lines), i + args.context + 1)
+            snippet = "\n".join(lines[lo:hi])
+            found.append((len(hits), e, i, snippet))
+
+    # Highest hit-count first: a paper that keeps coming back is the one on topic.
+    found.sort(key=lambda t: (-t[0], t[1]["slug"]))
+
+    shown = 0
+    seen_papers: set[str] = set()
+    for n_hits, e, line_no, snippet in found:
+        if shown >= args.max_results:
+            break
+        marker = "  " if e["slug"] in seen_papers else "->"
+        seen_papers.add(e["slug"])
+        print(f"\n{marker} {e['slug']}  [{e['arxiv_id']}]  {n_hits} hits  line {line_no}")
+        print("    " + snippet.replace("\n", "\n    ")[: args.max_chars])
+        shown += 1
+
+    print(f"\n--- {len(seen_papers)} papers matched, showing {shown} ---")
+    if words:
+        print(f"pattern terms: {', '.join(words)}")
+
+
+def cmd_stats(entries: list[dict]) -> None:
+    ok = [e for e in entries if e.get("fetch_status") in ("ok", "cached")]
+    tex = [e for e in ok if e.get("source") == "tex"]
+    pdf = [e for e in ok if e.get("source") == "pdf"]
+    total_bytes = sum(e.get("text_bytes", 0) for e in ok)
+
+    print(f"entries        {len(entries)}")
+    print(f"fetched        {len(ok)}  ({len(tex)} latex, {len(pdf)} pdf)")
+    print(f"text on disk   {total_bytes / 1e6:.1f} MB")
+
+    def tally(key):
+        out: dict[str, int] = {}
+        for e in entries:
+            out[e.get(key) or "(none)"] = out.get(e.get(key) or "(none)", 0) + 1
+        for k, v in sorted(out.items(), key=lambda kv: -kv[1])[:12]:
+            print(f"  {k:<24} {v}")
+
+    print("\nby section:")
+    tally("section")
+    print("\nby category:")
+    tally("category")
+
+    years: dict[int, int] = {}
+    for e in entries:
+        y = match_year(e.get("arxiv_id", ""))
+        if y:
+            years[y] = years.get(y, 0) + 1
+    print("\nby year:  " + "  ".join(f"{y}:{n}" for y, n in sorted(years.items())))
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("list", help="query the manifest")
+    p.add_argument("--has-code", action="store_true", help="only entries with released code")
+    p.add_argument("--section")
+    p.add_argument("--category")
+    p.add_argument("--local", action="store_true", help="only fetched locally")
+    p.add_argument("--missing", action="store_true", help="only NOT fetched")
+    p.add_argument("--since", type=int, help="year >= N")
+    p.add_argument("--until", type=int, help="year <= N")
+
+    p = sub.add_parser("show", help="metadata, links, and optionally full text")
+    p.add_argument("slug")
+    p.add_argument("--text", action="store_true", help="dump the whole extracted text")
+
+    p = sub.add_parser("grep", help="full-text search across the local corpus")
+    p.add_argument("pattern")
+    p.add_argument("--category", help="restrict to a category (e.g. tabular, causal)")
+    p.add_argument("--section", help="restrict to papers / queue")
+    p.add_argument("--since", type=int, help="only papers from year >= N")
+    p.add_argument("--has-code", action="store_true", help="only papers with released code")
+    p.add_argument("--context", type=int, default=1, help="lines either side")
+    p.add_argument("--limit", type=int, default=3, help="hits shown per paper")
+    p.add_argument("--max-results", type=int, default=10, help="papers shown in total")
+    p.add_argument("--min-hits", type=int, default=1, help="require N hits in a paper")
+    p.add_argument("--max-chars", type=int, default=600)
+
+    sub.add_parser("stats", help="corpus overview")
+
+    args = ap.parse_args()
+    entries = load()
+    if not entries:
+        sys.exit("manifest empty; rerun fm4sd_fetch.py --index")
+
+    if args.cmd == "stats":
+        cmd_stats(entries)
+    elif args.cmd == "show":
+        cmd_show(entries, args.slug, args)
+    else:
+        {"list": cmd_list, "grep": cmd_grep}[args.cmd](entries, args)
+
+
+if __name__ == "__main__":
+    main()
