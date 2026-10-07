@@ -54,25 +54,80 @@ both postdate the closer-look analysis.
 
 ---
 
-## Q3. Has anyone studied whether speedrun/pretraining gains survive *stacking*?
+## Q3. Do the speedrun gains actually *stack*?
+
+⚠️ **CORRECTION — an earlier version of this file said "no evidence". That was wrong.** The
+sweep searched paper text and found nothing, which I over-read as a gap in the literature. The
+definite answer is in the **speedrun repo, not the paper** — and the paper is also out of date.
+See [the correction below](#q3-correction-read-the-repo-not-just-the-paper).
+
+### Q3 correction: read the repo, not just the paper
+
+The records are **explicitly cumulative**, and each one is verified against the previous with
+many repeated runs.
+
+Evidence from `records/20260826widthsort/README.md`:
+
+> Comparison — 31 runs each of the previous record (**pr19**) and this one (**pr19+pr20**)
+
+The `pr19+pr20` notation is the point: a new record is *previous + one change*, not a parallel
+alternative. And the record itself states the change is narrow — "the model and optimizer are
+unchanged, only the order of the datasets within an epoch." So record 11 is record 10 plus a
+dataloader sort, measured over 31 runs each with bootstrap 95% CIs.
+
+Verified in the live `train_nano.py` (898 lines, single script): markers for Muon (14 hits),
+zeropower/Newton–Schulz (6), SDPA (2), `compile` (3), bf16 (5), `float32_matmul_precision` (1),
+residual decay `0.95` (2), RMSNorm (4), thinking rows (11), feature grouping (10) — all present
+in one file. The gains do compose.
+
+### The paper's numbers are stale
+
+The paper reports record 9 at **0.92 min**. The live repo has two records since:
+
+| # | Record | Date | Change | Contributor |
+|---|---|---|---|---|
+| 10 | **0.79 min** | 2026-08-15 | Shape-grouped Newton–Schulz, producer-thread dataloader, single datapoint SDPA | @tjeong117 |
+| 11 | **0.76 min** | 2026-08-26 | Feature-width sorted batching | @shounakb1 |
+
+Current: **0.76 min vs the 74.32 min baseline ≈ 98×**, on 4,096 synthetic datasets vs 80,576.
+
+**Quote 0.76 min / ~98×, not 0.92 min / 81×**, unless specifically discussing the paper.
+
+### Two caveats on record 11 worth knowing
+
+1. **Its margin is thin.** Record 10 median is 0.79 min, record 11 median 0.76 min, and record
+   11's own std is **0.06 min**. The improvement is roughly half a standard deviation — it may
+   not be a real separation. Record 11's own numbers also show the trade-off honestly: epochs got
+   *faster* per epoch (0.84s → 0.72s) but it needs *more* of them (57 → 64).
+2. **Sub-minute timings assume a warm `torch.compile` cache** — the record's README says so
+   explicitly. First-run wallclock will not match.
+
+### The exact target and eval, for reproduction
+
+Target: **≤ 0.8068462330697953** validation average ROC AUC — chosen to match Random Forest on the
+same subsampled TabArena evaluation. Evaluation: 38 TabArena **classification** tasks;
+subsample to 100 features and 1,000 rows (stratified by class); 5-fold shuffled
+`StratifiedKFold`; constant columns dropped, numeric mean-imputed, categorical ordinal-encoded;
+binary or one-vs-rest ROC AUC averaged over tasks.
+
+Note the paper itself is inconsistent on thinking-row count — the record-6 text says 16, the
+architecture caption says 24, and the live repo README lists **24**.
+
+For a clean starting point the repo recommends commit **`b0f29b7`**; `train_nano.py` on `main`
+has "gotten a bit crowded".
+
+---
+
+## Original sweep (superseded by the correction above)
 
 ```bash
 python3 scripts/fm4sd_search.py grep "catastrophic forgetting" --min-hits 3
 ```
 
-**Result: 2 papers, neither tabular.**
+Returned 2 papers, neither tabular: `continual-learning-compose` (6 hits), `nora` (4 hits).
 
-- `continual-learning-compose` (2609.06986) — 6 hits
-- `nora` (2608.31036) — 4 hits
-
-Both are general continual-learning work. **Nothing in this index addresses whether the
-speedrun ledger's gains are composable.** Each record was validated against the baseline target
-independently; the paper does not test the *combination* of records 2–9 together.
-
-This is a real gap in the protocol: the ledger is presented as a sequence where improvements
-"stack", and the leaderboard rules require each record to beat the *prior record*, but the
-paper does not report a joint run of all techniques. **Worth verifying empirically** before
-treating 81× as achieved.
+The corpus sweep was simply the wrong instrument here — a speedrun leaderboard's live state
+lives in its repo, and a 2026-06 paper cannot describe records set in 2026-08.
 
 ---
 

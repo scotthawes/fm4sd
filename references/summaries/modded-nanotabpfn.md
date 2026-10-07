@@ -28,16 +28,34 @@ evaluation pipeline as the speedrun model, so it cannot be gamed by changing eva
 
 ## Records — the actual ledger
 
+⚠️ **The paper's record 9 (0.92 min) is no longer current.** The live repo has two records
+since, at **0.79** and **0.76 min** — see [SWEEPS.md](SWEEPS.md) for the full current ledger,
+the exact eval protocol, and caveats. Cite **0.76 min / ~98×** for the state of the art, not
+0.92 / 81×.
+
+Records are **cumulative**, not alternatives: each new record is the previous plus one change,
+verified over many repeated runs with bootstrap CIs (record 11 compares `pr19` vs `pr19+pr20`,
+31 runs each).
+
 | # | Wallclock (min) | Synthetic datasets | Change |
 |---|---|---|---|
 | 1 | 74.32 | 80,576 | Baseline |
 | 2 | 54.41 | 45,824 | Muon optimizer |
 | 3 | 10.10 | 13,184 | SDPA, bf16, LR, width |
 | 4 | 9.26 | 13,184 | Batched Muon, compile |
+| 5 | 7.57 | — | Exponential decay of residual stream |
 | 6 | 3.88 | 9,664 | RMSNorm, thinking rows |
-| 9 | **0.92** | **3,648** | Autoresearch HPO, Muon weight decay, mean-pool decoder |
+| 7 | 3.48 | — | LAWA (latest weight averaging), AdamW weight decay |
+| 8 | 2.15 | — | Repeated feature grouping |
+| 9 | **0.92** | 3,648 | Autoresearch HPO, Muon weight decay, mean-pool decoder |
+| 10 | **0.79** | — | Shape-grouped Newton–Schulz, producer-thread dataloader, single datapoint SDPA |
+| 11 | **0.76** | 4,096 | Feature-width sorted batching |
 
-**81× wallclock, 22× fewer synthetic datasets.** Recorded σ: 0.90 min (baseline), 0.04 min (best).
+Target: **≤ 0.8068462330697953** val avg ROC AUC (RF-matched). Paper-era figure: 81× wallclock,
+22× fewer datasets. Current: ~98×, 20× fewer datasets.
+
+The exact number of thinking rows is inconsistent *within the paper* — record-6 text says 16,
+the architecture figure caption says 24, and the live repo lists **24**.
 
 ## Technique notes, from the paper
 
@@ -73,5 +91,11 @@ techniques in records 2–6 are directly transferable. Two observations worth ca
 - Subsampled TabArena is the eval. Nothing here establishes behaviour on high-dimensional,
   many-category, regression, or temporally-shifted tables — the regimes where TFMs are weakest.
 - Records 2–6 target *matching* baseline predictive performance, not improving it.
+- **Record 11's margin is thin**: 0.79 → 0.76 min against a stated std of 0.06 min, i.e. about
+  half a sigma. It may not be a real separation. Record 11 also shows its own trade-off honestly
+  — epochs got faster (0.84s → 0.72s) but it needs more of them (57 → 64).
+- **Sub-minute timings assume a warm `torch.compile` cache** (stated in the record's README).
+- The repo recommends commit `b0f29b7` as a clean starting point; `train_nano.py` on `main`
+  (898 lines) has gotten crowded.
 - The speedrun target is a RF-beating ROC AUC on **classification**. A continuous or
   two-part objective is a different target, and nothing here validates transfer to one.

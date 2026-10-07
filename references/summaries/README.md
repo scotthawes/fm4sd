@@ -18,12 +18,17 @@ range in `papers/<slug>/text.txt`.
 
 ## Sweeps
 
-[SWEEPS.md](SWEEPS.md) — five targeted `grep` sweeps, including two **negative** results:
+[SWEEPS.md](SWEEPS.md) — targeted `grep` sweeps, and one **negative** result that held up:
 
 - **Nothing** in this index treats feature-linked zeros / zero-inflated targets as an ICL
   decomposition problem. `foundcause` mentions zero-inflation only as a synthetic-data artefact.
-- **Nothing** here tests whether the speedrun ledger's gains *stack*. Each record is validated
-  against the baseline independently; no joint run of all techniques is reported.
+
+One sweep was **wrong and has been corrected in place**. I searched paper text for evidence that
+the speedrun gains stack, found nothing, and reported that as a gap. The records *do* stack —
+they are explicitly cumulative (`pr19` vs `pr19+pr20`, 31 runs each) — and the paper is also two
+records out of date. **A leaderboard's live state lives in its repo, not its paper.** The
+correction, with the current ledger at **0.76 min / ~98×**, is in
+[SWEEPS.md Q3](SWEEPS.md#q3-correction-read-the-repo-not-just-the-paper).
 
 ## Coverage
 
