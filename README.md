@@ -1,4 +1,56 @@
-# fm4sd papers
+# fm4sd — papers + a searchable local corpus
+
+> **This is a fork of [borawhocodess/fm4sd](https://github.com/borawhocodess/fm4sd)**, which
+> built the reading index below from the
+> [fm4sd seminar](https://ml.informatik.uni-freiburg.de/teaching/summer-semester-2026/seminar-seminar-on-foundation-models-for-structured-data/).
+> All credit for the index goes to them. Diverged 2026-10-07: the index is kept as-is and a
+> research layer is layered on top — local corpus tooling, machine-readable manifest, and
+> digests. Upstream history is intact, so diffing against `upstream/main` still works and
+> papers worth adding can still be sent back as PRs.
+
+## Research layer (ours)
+
+The index below is a list of **links**, which means the papers were never actually available to
+read or search — and upstream's `papers/` directory is gitignored, so there is no payload to
+clone. This fork resolves those links against arXiv and builds a local, greppable corpus.
+
+| | |
+|---|---|
+| **275** | entries in the index |
+| **225** | resolvable to arXiv, fetched locally (**221** LaTeX source, **4** PDF fallback) |
+| **30.5 MB** | of extracted plain text |
+| **117** | link released code |
+| **7** | papers digested closely, plus 5 corpus sweeps |
+
+```bash
+git clone https://github.com/scotthawes/fm4sd && cd fm4sd
+python3 scripts/fm4sd_fetch.py --index && python3 scripts/fm4sd_fetch.py --fetch   # ~30 MB
+pip install pymupdf    # only needed for the PDF fallback path
+
+python3 scripts/fm4sd_search.py stats
+python3 scripts/fm4sd_search.py grep "zero-inflation" --min-hits 3 --context 2
+python3 scripts/fm4sd_search.py show nanotabpfn
+```
+
+Start at **[`references/summaries/`](references/summaries/)** — the digests, and
+[`SWEEPS.md`](references/summaries/SWEEPS.md) for the sweep results, including two negative
+findings worth having.
+
+**Why LaTeX and not PDF.** Each paper is fetched from `arxiv.org/src/<id>` (the `.tex` bundle)
+before falling back to `/pdf/<id>`. Source is plain text with section structure and math
+intact, which is what makes it greppable; PDF extraction loses both.
+
+**Why the corpus is gitignored.** Licences in this index are not uniformly permissive, and the
+arXiv API does not report them — it omits `<arxiv:license>` entirely (verified: 2511.03634 is
+CC-BY-4.0 on its abs page, yet has no licence element in the API response). The manifest
+records licence as *unreported* rather than guessing. Unknown is not permission, so `papers/`
+stays local and `references/manifest.json` (ids, titles, categories, sha256, status) is tracked
+instead.
+
+Full details: [`references/README.md`](references/README.md) · [`PROVENANCE.md`](PROVENANCE.md)
+
+---
+
 
 started with [foundation models for structured data (fm4sd) seminar](https://ml.informatik.uni-freiburg.de/teaching/summer-semester-2026/seminar-seminar-on-foundation-models-for-structured-data/) , added more...
 
