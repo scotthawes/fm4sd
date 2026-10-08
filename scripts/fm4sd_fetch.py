@@ -368,14 +368,14 @@ def fetch_one(paper: Paper, limiter: RateLimiter, force: bool = False) -> Paper:
 MANIFEST_DELIM = "\n--- entries ---\n"
 
 
-def dump_manifest(papers: list[Paper]) -> str:
+def dump_manifest(papers: list[Paper], source: str) -> str:
     """Manifest is a header object, a delimiter line, then the entries array.
 
     A delimiter rather than a bare newline, so reading it back is unambiguous
     instead of depending on where the header object happens to end.
     """
     header = json.dumps({
-        "source": INDEX_URL,
+        "source": source,
         "note": "Parsed from the fm4sd README. Payload lives in gitignored papers/.",
         "count": len(papers),
     }, indent=2)
@@ -421,14 +421,27 @@ def reconcile(papers: list[Paper]) -> int:
     return recovered
 
 
-def cmd_index() -> None:
+def cmd_index(remote: bool = False) -> None:
     limiter = RateLimiter()
-    md = http_get(INDEX_URL, limiter).decode("utf-8", "replace")
+    # Default to the LOCAL README. This repo is a fork we took over, so local edits -- a new
+    # category, a corrected link -- must be what gets parsed. Fetching the upstream URL
+    # silently ignored every local addition, which is how 28 freshly added entries parsed
+    # to zero until this branch caught it. `--remote` reads upstream instead, for checking
+    # what the original index says.
+    if remote:
+        source = INDEX_URL
+        md = http_get(INDEX_URL, limiter).decode("utf-8", "replace")
+    else:
+        local = REPO / "README.md"
+        if not local.exists():
+            sys.exit("no local README.md; use --remote to read the upstream index")
+        source = "LOCAL README.md"
+        md = local.read_text(encoding="utf-8", errors="replace")
     papers = dedupe(parse_index(md))
     recovered = reconcile(papers)
 
     REFERENCES.mkdir(parents=True, exist_ok=True)
-    MANIFEST.write_text(dump_manifest(papers))
+    MANIFEST.write_text(dump_manifest(papers, source))
 
     with_arxiv = sum(1 for p in papers if p.arxiv_id)
     with_code = sum(1 for p in papers if p.has_code)
@@ -499,6 +512,8 @@ def cmd_status() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--index", action="store_true", help="parse the README into a manifest")
+    ap.add_argument("--remote", action="store_true",
+                    help="--index: read the upstream index URL instead of the local README")
     ap.add_argument("--fetch", action="store_true", help="fetch + extract text")
     ap.add_argument("--status", action="store_true", help="show what is fetched")
     ap.add_argument("--only", nargs="*", default=None, help="restrict to these slugs/ids")
@@ -507,7 +522,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.index:
-        cmd_index()
+        cmd_index(remote=args.remote)
     if args.fetch:
         cmd_fetch(args.only or [], args.force, args.workers)
     if args.status:
