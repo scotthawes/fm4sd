@@ -290,6 +290,20 @@ corpus at all.** The p99-for-reserving decision cannot be informed from these 22
 is a scope limit of the index (it is an ML-methods index, not an actuarial one), and it means
 the metric question stays a business decision rather than a literature question.
 
+> **PARTLY SUPERSEDED 2026-10-08.** The sweep result above is correct — the query really did
+> find nothing, for the reason given: *the index was ML-methods only.* What no longer holds is
+> the reading. Instead of accepting the void, **28 actuarial papers were added to the index**
+> under `actuarial / loss modelling`, and the corpus went 275 → 303 entries / 225 → 253 fetched.
+>
+> So: **the metric question is still a business decision** (nothing published evaluates a TFM
+> on tail accuracy — Audit 2), but it is no longer *uninformed* by literature. The actuarial
+> side now says what a tail estimate requires: a specified loss family and enough data
+> ([actuarial.md](actuarial.md)).
+>
+> The general lesson: **a null result that is really a scope limit is a reason to widen the
+> scope, not to stop.** Recorded alongside the two earlier sweeps whose nulls were query
+> artefacts.
+
 ---
 
 # Sweep round 2 — summary of what changes
@@ -299,7 +313,7 @@ the metric question stays a business decision rather than a literature question.
 | **A** ceiling fundamental? | Formal precedent exists but for a *different* obstruction. Do not overclaim. |
 | **B** unblock hardware? | **`baps` — actionable.** CPU-only context compression; only route found that could unblock the replication on existing hardware. |
 | **C** decomposition holds up? | No published counterpart — confirms novelty. **Bonus: `closedloop-priorselect` independently corroborates the closed prior line.** |
-| **D** p99 right metric? | **Nothing found.** No actuarial literature in the index; stays a business decision. |
+| **D** p99 right metric? | **Nothing found in the ML index** — but that was a scope limit, and 28 actuarial papers were added on 2026-10-08 to fill it. The metric question stays a business decision (no TFM paper evaluates tail accuracy) while the modelling question now has references. |
 
 ---
 

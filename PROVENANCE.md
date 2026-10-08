@@ -24,19 +24,41 @@ index's links against arXiv.
 
 | Field | Value |
 |---|---|
-| Index parsed | `main/README.md` at `62382d2` |
-| Entries parsed | 275 |
-| With an arXiv id | 225 (82%) |
+| Index parsed | **`README.md` in this fork** since 2026-10-08 (was upstream `main/README.md` at `62382d2`) |
+| Entries parsed | 303 (was 275 before the actuarial category) |
+| With an arXiv id | 253 (83%) |
 | Linking released code | 117 |
-| Fetched locally | 225 — 221 LaTeX source bundles, 4 PDF fallback |
-| Extracted text | 30.5 MB |
+| Fetched locally | 253 — 247 LaTeX source bundles, 6 PDF fallback |
+| Extracted text | 33.3 MB |
 | Source preference | `arxiv.org/src/<id>`, falling back to `arxiv.org/pdf/<id>` |
 | PDF extractor | PyMuPDF 1.28.2 |
 | Rate limit | 3 req/s, 5 worker threads |
 | Not fetchable | 50 entries — `pmlr`, `doi`, `springer`, `blog`, `lgresearch`, or PDF-only links |
 
 `references/manifest.json` is the machine-readable record: id, title, category, section,
-links, sha256, source type, byte counts, fetch status.
+links, sha256, source type, byte counts, fetch status. Its header records which index source was
+used.
+
+### Index source — changed 2026-10-08
+
+`--index` used to read `INDEX_URL`, the **upstream** `raw.githubusercontent.com/.../README.md`.
+This is a fork whose README we took over, so local edits were being silently ignored: 28 papers
+were added, `--index` reported 275 again, and only calling `parse_index()` directly (303) exposed
+the mismatch. It now defaults to the **local** `README.md`; `--remote` reads upstream for
+comparison.
+
+### Actuarial category — added 2026-10-08
+
+28 papers under `actuarial / loss modelling`, because the original index is ML-methods only: a
+sweep across 225 papers for `Tweedie|compound Poisson|loss ratio|actuarial|claim frequency`
+returned **two incidental hits**.
+
+IDs came from arXiv API **search results, never constructed**, and authors/years were taken from
+the API response rather than written from memory. Digest: `references/summaries/actuarial.md`.
+
+Scope limit: **arXiv-only.** Paywalled actuarial venues (IME, ASTIN) are unreachable, and
+`fm4sd_fetch.py` skips any entry without an arXiv ID — the same reason 50 pre-existing entries
+were never fetched.
 
 ## Licence — recorded as UNKNOWN, deliberately
 

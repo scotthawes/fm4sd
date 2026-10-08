@@ -16,6 +16,12 @@ indicator/magnitude decomposition, (D) tail metrics.
 | [temporal-tabular-shift](temporal-tabular-shift.md) | A formal lower bound on what a frozen TFM cannot recover, invariant in sample size. Same *shape* of claim as the p99 ceiling — but a different obstruction |
 | [tacticl](tacticl.md) | Up to 85% of layers replaceable, ICL retained. Also the corpus's clearest statement of why distillation ≠ free win |
 
+## Actuarial digest — added 2026-10-08
+
+| | |
+|---|---|
+| [actuarial](actuarial.md) | 28 papers added to the index to fill a void: the original corpus is **ML-methods only** and a sweep for `Tweedie|compound Poisson|loss ratio|actuarial|claim frequency` across 225 papers returned **two incidental hits**. Four extracts that bear on the tail seam — and three of them *narrow* existing claims in this repo rather than confirming them. |
+
 ## Round 1 digests
 
 | Paper | Why it is here |
@@ -39,7 +45,7 @@ positive.**
 | Ceiling fundamental? | Formal precedent exists, but for a *different* obstruction. Do not overclaim. |
 | Unblock hardware? | **baps — actionable**, CPU-only, training-free |
 | Decomposition holds up? | No published counterpart; novelty confirmed. Bonus: corroboration of the closed prior line. |
-| p99 the right metric? | **Nothing found.** No actuarial literature in this index at all — stays a business decision. |
+| p99 the right metric? | **Nothing in the ML index.** That was a scope limit, so **28 actuarial papers were added 2026-10-08** (see above). The metric question stays a business decision — no TFM paper evaluates tail accuracy — but the *modelling* question now has references. |
 
 ## Two corrections — both from trusting a sweep too quickly
 
@@ -59,7 +65,8 @@ positive.**
 
 ## Coverage
 
-11 of 225 fetched papers digested. The rest are corpus for sweeping — see `../manifest.json` and
+12 digest documents covering ~35 papers, of **253 fetched** (corpus grew 275 → 303 entries on
+2026-10-08). The rest are corpus for sweeping — see `../manifest.json` and
 `../README.md`.
 
 Not yet digested but high-value on the current question set: `gotabpfn` (high-dim tokenization),
