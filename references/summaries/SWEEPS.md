@@ -167,3 +167,218 @@ carries the wrong label.
 
 Upstream's own `todos` file independently flags "quantization in the TFM world … applied to
 TabPFN", so this axis is already on the maintainer's radar.
+---
+
+# Sweep round 2 — targeted at this project's open questions (2026-10-08)
+
+Four sweeps run against the four live sub-questions in the private repo: (A) is the ~5%
+conditional-severity ceiling fundamental, (B) can anything unblock the hardware wall, (C) does
+the indicator/magnitude decomposition hold up, (D) is p99 the right metric.
+
+---
+
+## A2. Is the ceiling fundamental or a feature-engineering gap?
+
+```bash
+python3 scripts/fm4sd_search.py grep "irreducible|aleatoric|feature.set ceiling|explainable variance|epistemic" \
+  --category tabular --min-hits 3
+```
+
+**2 papers.** Only one is on point:
+
+- `temporal-tabular-shift` (2609.12136) — a **formal, sample-size-invariant lower bound**: the
+  identified-set diameter, the "wall", is "irreducible from unlabeled data uniformly in sample
+  size". Also an orthogonal "$L^2$ projection wall" for what a frozen representation cannot
+  express. [Digest](temporal-tabular-shift.md)
+
+**Conclusion:** the *shape* of the claim ("the limit is not a sample-size problem") has formal
+precedent, which is useful when the p99 ceiling is challenged. But it is a **different
+obstruction** — unlabeled-data identifiability, not information the covariates do not carry.
+Do not cite it as proof F30's ceiling is fundamental.
+
+`tabpfn` matched only on a commented-out line, not a result.
+
+---
+
+## B2. Can anything unblock the hardware wall?
+
+```bash
+python3 scripts/fm4sd_search.py grep "compress|distill|quantiz|memory efficient|inference cost|kv cache" \
+  --category tabular --min-hits 3
+```
+
+**8 papers. This is where the sweep paid off.**
+
+| Paper | Approach | Reduction | Verdict |
+|---|---|---|---|
+| **`baps`** (2608.12989) | information-preserving **context** construction | **~1,953:1** context, **512 prototypes**, **CPU-only, no GPU** | **[Digest](baps.md) — the actionable one** |
+| `tacticl` (2608.10837) | prune layers + task adapters | up to **85%** of layers, retains ICL | [Digest](tacticl.md) — task-specific |
+| `memoryefficienttfms` (2607.27546) | **INT4 quantization** | **7.6×** memory footprint | weights, not context |
+| `attention-quantization-tfm` (2609.13031) | attention quantization | — | argues *attention calculation* is the target, not weights/KV |
+| `tfm-distillation` (2610.01435) | distillation supervision | — | teacher-query construction |
+| `gotabpfn` (2606.05441) | compact tokenization, HDLSS | — | high-dim/low-sample, no retraining |
+| `localdistillation` (2608.23538) | local distillation | — | benchmark + theory |
+| `tdcoler` (2501.13905) | dataset distillation for pre-training | — | per-dataset level |
+
+**Conclusion:** `baps` is the only paper that speaks **directly** to a live blocker rather than
+confirming something known. It suggests compressing the *context* instead of shrinking the
+dataset — CPU-only, training-free — which is the only route found that could make the
+hardware-blocked replication runnable on the existing machine. Four material caveats (TabPFN not
+TabICL, classification-only, context not test rows, ECE not tail calibration) are in the digest.
+
+---
+
+## C2. Does the indicator/magnitude decomposition hold up?
+
+```bash
+python3 scripts/fm4sd_search.py grep "two.part|hurdle|zero.inflated|two.stage|compound poisson|zero inflated" --min-hits 3
+```
+
+**8 papers, none on target for the decomposition.** Every "two-stage" hit is an unrelated
+two-stage *training* or *search* procedure (time-series encoders, prior selection, GRPO code
+training, graph sampling). **No paper in this corpus models a zero-inflated or hurdle target as
+an ICL decomposition problem.**
+
+**Conclusion:** reinforces the earlier negative result. The two-part framing this project
+arrived at from first principles (F30/F31) has **no published counterpart** in this index, which
+is either novelty or a sign it is not considered an interesting angle. The sweep cannot
+distinguish those.
+
+`tabicl` matched on its large-data motivation (4 hits), not on decomposition.
+
+**But the sweep found something else, and it is the biggest conceptual result of the round:**
+
+### C2-bonus. Prior injection: a three-condition regularity that corroborates F32
+
+`closedloop-priorselect` (2609.06941) surfaced via "two-stage", not any prior-related query. It is
+the closest published precedent to the question the roadmap asked, for a different PFN family,
+and it reaches the same answer by construction:
+
+> prior injection yields significant gains **only when** the base is **underfit**, the prior
+> domain **matches** the task domain, and the task lies **within the base's training-prior
+> support**.
+
+This project fails **all three**: F32 puts the stock checkpoint at **98.7% of the Bayes
+ceiling** (not underfit), the prior is binary/≤5-feature vs insurance's 19–130 continuous
+features (domain mismatch), and the task dimensionality far exceeds the prior support. The paper
+also states the failure mode directly — "injecting the same recipe into an **already-strong base
+degrades it 4–9×** with a complete ranking reversal."
+
+[Digest](closedloop-priorselect.md), including the pushback: the paper's support-boundary theorem
+says out-of-support tasks are repairable only by *expanding the support* (retraining), which
+reads as an argument for the full pretraining this project declined. The digest records why it
+is not: closedloop's wall is a **representation** limit, F30's ceiling is an **information**
+limit, and only the first is fixable by retraining.
+
+---
+
+## D2. Tail calibration / capital / reserving
+
+```bash
+python3 scripts/fm4sd_search.py grep "tail calibration|capital|reserving|p99|quantile regression|tail risk" \
+  --category tabular --min-hits 3
+```
+
+**6 papers, essentially all noise.** "capital" matches `\usepackage[capitalize]` and "Figure
+reference, capital." Most hits are formatting artefacts, not the concept.
+
+The only substantive match is `baps` again (calibration, via ECE). `gotabpfn`, `tabpfn-3`,
+`tabgenfm`, `architecturealignment`, `numstretch` matched on formatting or unrelated text.
+
+**Conclusion:** there is **no actuarial / reserving / tail-calibration literature in this
+corpus at all.** The p99-for-reserving decision cannot be informed from these 225 papers. That
+is a scope limit of the index (it is an ML-methods index, not an actuarial one), and it means
+the metric question stays a business decision rather than a literature question.
+
+---
+
+# Sweep round 2 — summary of what changes
+
+| Sub-question | Result |
+|---|---|
+| **A** ceiling fundamental? | Formal precedent exists but for a *different* obstruction. Do not overclaim. |
+| **B** unblock hardware? | **`baps` — actionable.** CPU-only context compression; only route found that could unblock the replication on existing hardware. |
+| **C** decomposition holds up? | No published counterpart — confirms novelty. **Bonus: `closedloop-priorselect` independently corroborates the closed prior line.** |
+| **D** p99 right metric? | **Nothing found.** No actuarial literature in the index; stays a business decision. |
+
+---
+
+# CORRECTION (2026-10-08): the "zero-inflation is unclaimed" result was a bad sweep
+
+The round-1 conclusion above — "**Nothing** in this index treats feature-linked zeros /
+zero-inflated targets as an ICL decomposition problem" — is **WRONG**, and the way it was
+wrong is worth recording because it will recur.
+
+## The two errors
+
+**1. `--min-hits 3` discarded every relevant paper.** A concept mentioned once or twice does not
+survive a threshold of 3. The files that mention zero-inflation contain **1–2** hits each:
+
+| paper | hits for `zero.inflat` |
+|---|---:|
+| `foundcause` | 2 |
+| `tabcausal` | 1 |
+| `avici` | 1 |
+| `tabpfn-2-5` | 1 |
+| `tabpfn-3` | 1 |
+
+Re-running the identical round-1 command with the tool's **default** `--min-hits 1`:
+
+```bash
+python3 scripts/fm4sd_search.py grep "zero.?inflation" --min-hits 1 --max-results 10
+```
+
+...immediately surfaces papers the threshold had hidden.
+
+**2. A morphological variant escaped the pattern entirely.** `zero.?inflation` requires the
+string "…inflatio**n**". The TabPFN papers write **`zero_inflated`** (past participle), which does
+not match. So the two papers most likely to be directly on topic were invisible to *both* the
+threshold and the regex.
+
+## What is actually in the corpus
+
+Zero-inflation **is** present in tabular and causal FM *generator* designs:
+
+- **`tabcausal`** (2605.31156) — its generator has an explicit rendering called
+  **`zero_inflated_positive`**: "positive rendering with zero inflation (e.g., ≈10%)", alongside
+  `censored_positive` and `missing_to_zero_identity`. This is a prior/generator that emits
+  zero-inflated positive targets — the same *mechanism class* as this project's F19/F20 generator.
+- **`foundcause`** (2606.17516) — post-processing "adds **zero-inflation or censoring** with
+  probability 4%", listed among anti-shortcut perturbations applied to synthetic tasks.
+- **`avici`** (2205.12934) — simulates "highly zero-inflated count matrices" for single-cell RNA
+  (causal discovery; different domain).
+- **`tabpfn-2-5` / `tabpfn-3`** — their use-case lists cite a paper that "modified TabPFN … in
+  metagenomics, matching species abundance patterns with **synthetic priors**"
+  ([OpenReview 3I0bVvUj25](https://openreview.net/forum?id=3I0bVvUj25)). Species abundance is
+  canonically zero-inflated, and the modification is to the **synthetic prior** — the closest
+  published analogue to this project's prior hypothesis.
+
+## What this changes, and what it does not
+
+**It does not** resurrect the prior line. None of the four does what this project did:
+
+- none tests whether zero-inflation is **learnable** (F20's random-mask null: AUC 0.494 vs 0.491)
+- none **calibrates the zero mask to a measured real zero-AUC** (F20/F30: 0.681–0.708)
+- none asks whether **feature-linked** vs random zeros matter
+- none measures whether a trained model is already **at the Bayes ceiling** (F32: 98.7%)
+- `tabcausal`'s rate is ~10% zeros; the Spanish severity table is **88.9%**
+
+So the project's contribution is narrower than "unclaimed", but it is still distinct: it is the
+**calibration and the learnability test**, not the mere presence of zero-inflation in a prior.
+
+**It does** mean the honest phrasing is:
+
+> Zero-inflated targets appear in several tabular/causal FM generators, but no paper in this
+> index studies whether zero-inflation is *learnable*, or calibrates the zero mask to real data.
+> The F19/F20/F32 contribution is the calibration and the ceiling test, not the mechanism.
+
+## Rules recorded
+
+1. **Do not set `--min-hits` above the tool default for a first pass.** A null result from a
+   thresholded search is a statement about the threshold, not about the literature. Round 1's
+   headline negative result was entirely an artefact of `--min-hits 3`.
+2. **Search morphological variants.** `zero-inflation` / `zero inflat*` / `zero_inflated` are the
+   same concept; a single inflection misses papers. Prefer stems with `--pattern 'zero.?inflat'`.
+3. **A negative sweep result must be re-run with a looser threshold before it is published.**
+   Both errors above were caught only because the key negative result was double-checked against
+   a direct `grep -rl`.

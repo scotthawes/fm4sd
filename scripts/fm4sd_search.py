@@ -170,6 +170,22 @@ def cmd_grep(entries: list[dict], args) -> None:
     if words:
         print(f"pattern terms: {', '.join(words)}")
 
+    # Guard the most expensive mistake this tool can make: reporting a null result
+    # that is an artefact of the search, not a fact about the literature. It has
+    # already happened once -- `--min-hits 3` discarded every paper that mentions
+    # zero-inflation (they contain 1-2 hits each), and the null was published as
+    # "nothing in the index addresses this".
+    if not seen_papers:
+        print("\n!! ZERO MATCHES. Before reporting this as a negative result, check:")
+        print("   - morphology: try a stem, e.g. 'zero.?inflat' not 'zero-inflation'")
+        print("   - threshold: a concept mentioned once will not survive --min-hits 3")
+        if args.min_hits > 1:
+            print(f"   - you set --min-hits {args.min_hits}; re-run with 1 to be sure")
+        if args.category or args.section or args.since or args.has_code:
+            print("   - you scoped the search; re-run unscoped to be sure")
+        print("   A null from a scoped or thresholded search is a fact about the")
+        print("   query, not about the corpus.")
+
 
 def cmd_stats(entries: list[dict]) -> None:
     ok = [e for e in entries if e.get("fetch_status") in ("ok", "cached")]
